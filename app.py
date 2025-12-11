@@ -5,6 +5,9 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
+from langchain_core.output_parsers import StrOutputParser
+
 load_dotenv()
 
 # Indexing (Document Ingestion)
@@ -49,12 +52,12 @@ Question: {question}
 """, input_variables=['context', 'question']
 )
 
-question = "What is the lack table made of?"
-retrieved_docs = retriever.invoke(question)
+# question = "What is the lack table made of?"
+# retrieved_docs = retriever.invoke(question)
 
-context_text = " ".join(docs.page_content for docs in retrieved_docs)
+# context_text = " ".join(docs.page_content for docs in retrieved_docs)
 
-final_prompt = prompt.invoke({"context": context_text, "question": question})
+# final_prompt = prompt.invoke({"context": context_text, "question": question})
 #print(final_prompt)
 
 # Generation
@@ -64,5 +67,22 @@ llm = HuggingFaceEndpoint(
 )
 
 model = ChatHuggingFace(llm = llm)
-print(model.invoke(final_prompt))
+# print(model.invoke(final_prompt))
+
+# Using Chains
+def format_docs(retrieved_docs):
+    context_text = " ".join(docs.page_content for docs in retrieved_docs)
+    return context_text
+
+parallel_chain = RunnableParallel(
+    {
+        'context': retriever | RunnableLambda(format_docs),
+        'question': RunnablePassthrough()
+    }
+)
+
+parser = StrOutputParser()
+main_chain = parallel_chain | prompt | model | parser
+
+print(main_chain.invoke("What is the lack table made of?"))
 
